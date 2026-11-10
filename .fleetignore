@@ -1,0 +1,4 @@
+# Not Kubernetes manifests. Fleet renders only the chart.
+app/*
+Dockerfile
+README.md

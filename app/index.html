@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Northline Site Console</title>
+<style>
+  :root {
+    --bg: #0d1517; --panel: #142125; --line: #23363b; --text: #dce8e6;
+    --muted: #87a19d; --ok: #30ba78; --warn: #f2a73b; --bad: #e0614f; --sim: #7aa6d6;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { display: flex; flex-wrap: wrap; gap: 8px 24px; align-items: baseline;
+           padding: 20px 24px; border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 20px; font-weight: 600; }
+  header .site { font: 600 20px ui-monospace, Menlo, monospace; color: var(--ok); }
+  header .meta { color: var(--muted); font-size: 13px; margin-left: auto; }
+  main { display: grid; gap: 16px; padding: 24px;
+         grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; }
+  section h2 { margin: 0 0 12px; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .tag { font-size: 11px; padding: 2px 8px; border-radius: 10px; margin-left: 8px; vertical-align: 1px; }
+  .tag.live { background: rgba(48,186,120,.15); color: var(--ok); }
+  .tag.sim { background: rgba(122,166,214,.15); color: var(--sim); }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: 6px 16px; margin: 0; }
+  dt { color: var(--muted); }
+  dd { margin: 0; font-family: ui-monospace, Menlo, monospace; overflow-wrap: anywhere; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 6px 4px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 500; }
+  td.num { font-family: ui-monospace, Menlo, monospace; }
+  .ok { color: var(--ok); } .warn { color: var(--warn); } .bad { color: var(--bad); }
+  .note { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+  .wide { grid-column: 1 / -1; }
+  footer { padding: 0 24px 24px; color: var(--muted); font-size: 12px; }
+  @media (max-width: 480px) { header, main { padding: 16px; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Northline Site Console</h1>
+  <span class="site" id="site">loading</span>
+  <span class="meta" id="updated"></span>
+</header>
+<main>
+  <section>
+    <h2>Site cluster <span class="tag live">live</span></h2>
+    <dl>
+      <dt>Distribution</dt><dd id="dist">-</dd>
+      <dt>Kubernetes</dt><dd id="k8s">-</dd>
+      <dt>Nodes</dt><dd id="nodes">-</dd>
+      <dt>Pods running</dt><dd id="pods">-</dd>
+      <dt>Site type</dt><dd id="stype">-</dd>
+    </dl>
+  </section>
+  <section>
+    <h2>This node <span class="tag live">live</span></h2>
+    <dl>
+      <dt>Node</dt><dd id="node">-</dd>
+      <dt>Roles</dt><dd id="roles">-</dd>
+      <dt>OS</dt><dd id="os">-</dd>
+      <dt>Host IP</dt><dd id="hostip">-</dd>
+      <dt>Console pod</dt><dd id="pod">-</dd>
+    </dl>
+  </section>
+  <section>
+    <h2>Virtual machines <span class="tag live">live</span></h2>
+    <div id="vms">-</div>
+  </section>
+  <section class="wide">
+    <h2>Radio sectors <span class="tag sim">simulated</span></h2>
+    <table>
+      <thead><tr><th>Sector</th><th>Band</th><th>PRB use</th><th>Attached UEs</th><th>Status</th></tr></thead>
+      <tbody id="sectors"></tbody>
+    </table>
+    <p class="note" id="simnote"></p>
+  </section>
+</main>
+<footer id="errors"></footer>
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const val = v => v === null || v === undefined ? 'unknown' : v;
+
+async function refresh() {
+  try {
+    const r = await fetch('/api/site', { cache: 'no-store' });
+    const d = await r.json();
+    if (d.error) throw new Error(d.error);
+    const l = d.live;
+    document.title = `${l.site} | Northline Site Console`;
+    $('site').textContent = l.site;
+    $('dist').textContent = l.distribution;
+    $('k8s').textContent = l.kubernetes;
+    $('nodes').textContent = val(l.nodeCount);
+    $('pods').textContent = l.podsTotal === null ? 'unknown' : `${l.podsRunning} of ${l.podsTotal}`;
+    $('stype').textContent = l.siteType;
+    $('node').textContent = l.node;
+    $('roles').textContent = l.nodeRoles;
+    $('os').textContent = l.osImage;
+    $('hostip').textContent = l.hostIP;
+    $('pod').textContent = `${l.namespace}/${l.pod}`;
+
+    if (l.virtualMachines === null) {
+      $('vms').innerHTML = '<p class="note">KubeVirt is not installed on this site.</p>';
+    } else if (!l.virtualMachines.length) {
+      $('vms').innerHTML = '<p class="note">KubeVirt is installed. No guests are running.</p>';
+    } else {
+      $('vms').innerHTML = '<table><thead><tr><th>Guest</th><th>Phase</th><th>Node</th></tr></thead><tbody>' +
+        l.virtualMachines.map(v => `<tr><td>${esc(v.namespace)}/${esc(v.name)}</td>` +
+          `<td class="${v.phase === 'Running' ? 'ok' : 'warn'}">${esc(v.phase)}</td><td>${esc(v.node)}</td></tr>`).join('') +
+        '</tbody></table>';
+    }
+
+    $('sectors').innerHTML = d.simulated.sectors.map(s =>
+      `<tr><td>${esc(s.sector)}</td><td>${esc(s.band)}</td><td class="num">${s.prbUtilisation}%</td>` +
+      `<td class="num">${s.attachedUEs}</td><td class="${s.status === 'ok' ? 'ok' : 'warn'}">${esc(s.status)}</td></tr>`).join('');
+    $('simnote').textContent = d.simulated.note;
+    $('updated').textContent = 'updated ' + new Date(d.timestamp).toLocaleTimeString();
+    $('errors').textContent = l.errors.length ? 'API errors: ' + l.errors.join('; ') : '';
+  } catch (e) {
+    $('updated').innerHTML = `<span class="bad">${esc(e.message)}</span>`;
+  }
+}
+refresh();
+setInterval(refresh, 15000);
+</script>
+</body>
+</html>

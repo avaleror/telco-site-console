@@ -1,0 +1,15 @@
+# Fleet bundle for the Northline site console.
+# The workshop GitRepo (lab 06) selects clusters labelled demo=true and
+# site-type=downstream. Those targets replace any here, so this file only sets
+# the namespace and the values every site gets.
+defaultNamespace: telco-site-console
+
+helm:
+  chart: ./chart
+  releaseName: telco-site-console
+  takeOwnership: true
+  values:
+    # Rancher labels every Fleet cluster with its display name, so each site
+    # shows its own name (site-co-01, site-ran-01) from one GitRepo.
+    clusterName: '${ get .ClusterLabels "management.cattle.io/cluster-display-name" }'
+    siteType: '${ get .ClusterLabels "site-type" }'

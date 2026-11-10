@@ -1,0 +1,12 @@
+image:
+  repository: docker.io/avaleror/telco-site-console
+  tag: latest
+  pullPolicy: IfNotPresent
+
+# Shown in the console header. fleet.yaml fills it from the Rancher cluster
+# display name; empty falls back to the default below.
+clusterName: ""
+siteType: ""
+
+service:
+  nodePort: 30080
